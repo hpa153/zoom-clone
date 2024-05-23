@@ -2,14 +2,77 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { Call, useStreamVideoClient } from "@stream-io/video-react-sdk";
 
 import MeetingTypeCard from "./MeetingTypeCard";
+import MeetingModal from "./MeetingModal";
+import { useToast } from "./ui/use-toast";
+
+const initialCallValues = {
+  dateTime: new Date(),
+  description: "",
+  link: "",
+};
 
 const MeetingTypeList = () => {
   const router = useRouter();
+
   const [meetingState, setMeetingState] = useState<
     "isScheduleMeeting" | "isJoiningMeeting" | "isInstantMeeting" | undefined
   >(undefined);
+  const [callValues, setCallValues] = useState(initialCallValues);
+  const [callDetails, setCallDetails] = useState<Call>();
+
+  const { user } = useUser();
+  const streamClient = useStreamVideoClient();
+  const { toast } = useToast();
+
+  const createMeeting = async () => {
+    if (!user || !streamClient) {
+      return;
+    }
+
+    try {
+      if (!callValues.dateTime) {
+        toast({ title: "Please select a date and time!" });
+        return;
+      }
+
+      const id = crypto.randomUUID();
+      const call = streamClient.call("default", id);
+
+      if (!call) {
+        throw new Error("Failed to create new meeting!");
+      }
+
+      const startsAt =
+        callValues.dateTime.toISOString() || new Date(Date.now()).toISOString();
+      const description = callValues.description || "Instant Meeting";
+
+      await call.getOrCreate({
+        data: {
+          starts_at: startsAt,
+          custom: {
+            description,
+          },
+        },
+      });
+
+      setCallDetails(call);
+
+      if (!callValues.description) {
+        router.push(`/meeting/${call.id}`);
+      }
+
+      toast({
+        title: "Meeting Created",
+      });
+    } catch (error) {
+      console.log(error);
+      toast({ title: "Failed to create new meeting!" });
+    }
+  };
 
   return (
     <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -40,6 +103,14 @@ const MeetingTypeList = () => {
         description="Meeting Recordings"
         className="bg-yellow-1"
         handleClick={() => router.push("/recordings")}
+      />
+      <MeetingModal
+        isOpen={meetingState === "isInstantMeeting"}
+        onClose={() => setMeetingState(undefined)}
+        title="Start a Meeting"
+        className="text-center"
+        buttonText="Start Meeting"
+        handleClick={createMeeting}
       />
     </section>
   );

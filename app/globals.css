@@ -80,6 +80,9 @@
   color: white;
 }
 
+.cl-internal-11ttlho:has(div:only-child) {
+  display: none;
+}
 /* =============================== */
 
 @layer utilities {
